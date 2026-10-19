@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Serpents & Spires 3D — Material Snakes & Ladders</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter, Outfit & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,1,0" rel="stylesheet">
+    <!-- Three.js (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --md-surface: rgba(255, 255, 255, 0.88);
+            --md-surface-container: rgba(244, 246, 251, 0.92);
+            --md-outline: rgba(116, 119, 127, 0.18);
+            --md-primary: #3B82F6;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 35%, #f8fafc 0%, #e2e8f0 100%);
+            font-family: 'Inter', sans-serif;
+            color: #1e293b;
+        }
+
+        .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        /* Material 3 Elevated Glass Surfaces */
+        .m3-surface {
+            background: var(--md-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline);
+            box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+        }
+
+        .m3-dock {
+            background: var(--md-surface-container);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--md-outline);
+            box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.14);
+        }
+
+        .m3-btn {
+            transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        .m3-btn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        .m3-chip-active {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            border-color: #93c5fd;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45); }
+            70% { box-shadow: 0 0 0 12px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        .roll-cta-pulse {
+            animation: pulse-ring 2s infinite;
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- 3D WebGL Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Single-Level Material 3 Header Bar -->
+    <header class="fixed top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        <!-- Brand Card -->
+        <div class="m3-surface px-4 py-2.5 rounded-full flex items-center gap-3 pointer-events-auto">
+            <div class="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                <span class="material-symbols-rounded text-xl">Attractions</span>
+            </div>
+            <div class="pr-2">
+                <h1 class="font-display font-bold text-sm md:text-base tracking-tight text-slate-900 leading-none">SERPENTS & SPIRES</h1>
+                <p class="text-[11px] font-medium text-slate-500 tracking-wide mt-0.5">Minimalist 3D Board • Material 3</p>
+            </div>
+        </div>
+
+        <!-- Live Event Telemetry Banner -->
+        <div id="event-banner" class="m3-surface px-5 py-2.5 rounded-full flex items-center gap-2.5 pointer-events-auto transition-all duration-300">
+            <span id="event-dot" class="w-3 h-3 rounded-full bg-rose-500 shadow-sm transition-colors duration-300"></span>
+            <span id="event-text" class="text-xs md:text-sm font-semibold text-slate-800">Player 1's Turn — Roll the 3D Die!</span>
+        </div>
+
+        <!-- Camera Preset & Audio Controls -->
+        <div class="m3-surface p-1.5 rounded-full flex items-center gap-1 pointer-events-auto">
+            <button id="cam-iso" onclick="setCameraView('iso')" class="m3-btn m3-chip-active px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-transparent" title="Isometric 3D View">
+                <span class="material-symbols-rounded text-base">view_in_ar</span>
+                <span class="hidden sm:inline">3D Tilt</span>
+            </button>
+            <button id="cam-top" onclick="setCameraView('top')" class="m3-btn px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:bg-slate-200/60 flex items-center gap-1 border border-transparent" title="Top-Down Map View">
+                <span class="material-symbols-rounded text-base">grid_view</span>
+                <span class="hidden sm:inline">Top View</span>
+            </button>
+            <div class="w-[1px] h-5 bg-slate-300/70 mx-0.5"></div>
+            <button id="btn-sound" onclick="toggleAudio()" class="m3-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-700 hover:bg-slate-200/60" title="Toggle Sound Effects">
+                <span id="sound-icon" class="material-symbols-rounded text-lg">volume_up</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Left Floating Card: Players & Positions (2 to 4 Players) -->
+    <aside class="fixed left-4 top-20 z-20 w-64 m3-surface rounded-3xl p-4 pointer-events-auto hidden md:flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <span class="material-symbols-rounded text-base text-indigo-600">groups</span>
+                Active Contenders
+            </span>
+            <span id="player-count-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">2 Players</span>
+        </div>
+
+        <!-- Dynamic Player List -->
+        <div id="player-cards-container" class="flex flex-col gap-2"></div>
+
+        <!-- Legend -->
+        <div class="mt-1 pt-2.5 border-t border-slate-200/80 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+            <div class="flex items-center gap-1.5 bg-amber-50/90 px-2.5 py-1.5 rounded-xl border border-amber-200/60">
+                <span class="material-symbols-rounded text-amber-600 text-sm">stairs</span>
+                <span class="font-medium">7 Golden Spires</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-emerald-50/90 px-2.5 py-1.5 rounded-xl border border-emerald-200/60">
+                <span class="material-symbols-rounded text-emerald-600 text-sm">vital_signs</span>
+                <span class="font-medium">7 Hungry Vipers</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Bottom Single-Level Material 3 Action Dock -->
+    <nav class="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 max-w-[96vw] m3-dock px-3 py-2 rounded-full flex items-center gap-2 md:gap-3 pointer-events-auto">
+        <!-- Player Count Segmented Selector (2, 3, or 4 Players) -->
+        <div class="flex items-center bg-slate-200/75 p-1 rounded-full">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2.5 hidden sm:inline">Players:</span>
+            <button id="pcount-2" onclick="changePlayerCount(2)" class="m3-btn px-3 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 shadow-sm">
+                2P
+            </button>
+            <button id="pcount-3" onclick="changePlayerCount(3)" class="m3-btn px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 hover:text-slate-900">
+                3P
+            </button>
+            <button id="pcount-4" onclick="changePlayerCount(4)" class="m3-btn px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 hover:text-slate-900">
+                4P
+            </button>
+        </div>
+
+        <div class="h-7 w-[1px] bg-slate-300/80 shrink-0"></div>
+
+        <!-- 3D Dice Readout Pill + Primary Roll Button -->
+        <div class="flex items-center gap-2.5">
+            <div class="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-full border border-slate-200 shadow-inner">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Die</span>
+                <span id="dice-value-badge" class="font-display font-extrabold text-lg text-indigo-600 w-5 text-center">-</span>
+            </div>
+
+            <button id="btn-roll" onclick="triggerDiceRoll()" class="m3-btn roll-cta-pulse px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-display font-bold text-sm tracking-wide flex items-center gap-2 shadow-md">
+                <span class="material-symbols-rounded text-xl">casino</span>
+                <span id="btn-roll-label">ROLL DICE</span>
+            </button>
+        </div>
+
+        <div class="h-7 w-[1px] bg-slate-300/80 shrink-0"></div>
+
+        <!-- Reset Match Button -->
+        <button onclick="resetGame()" class="m3-btn p-2.5 rounded-full text-slate-600 hover:bg-slate-200/75 hover:text-slate-900" title="Restart Game">
+            <span class="material-symbols-rounded text-xl">restart_alt</span>
+        </button>
+    </nav>
+
+    <!-- Victory Modal Dialog -->
+    <div id="victory-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/50 backdrop-blur-md p-4">
+        <div class="m3-surface rounded-3xl p-7 max-w-sm w-full text-center space-y-5 border border-white">
+            <div id="victory-icon-wrap" class="mx-auto w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shadow-inner">
+                <span class="material-symbols-rounded text-4xl">emoji_events</span>
+            </div>
+            <div>
+                <p class="text-xs font-bold uppercase tracking-widest text-indigo-600">Ascension Complete</p>
+                <h2 id="victory-title" class="font-display text-2xl font-extrabold text-slate-900 mt-1">Player 1 Wins!</h2>
+                <p id="victory-subtitle" class="text-xs text-slate-600 mt-1">Reached the 100th Sanctuary Tile triumphant.</p>
+            </div>
+            <div class="pt-2 flex items-center justify-center gap-3">
+                <button onclick="closeVictoryModal()" class="m3-btn px-4 py-2.5 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-200/70">
+                    Inspect Board
+                </button>
+                <button onclick="resetGame()" class="m3-btn px-6 py-2.5 rounded-full text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /***********************************************************************
+         * 1. WEB AUDIO SYNTHESIZER (DICE CLATTER, HOP, LADDER & SNAKE GULP SFX)
+         ***********************************************************************/
+        class MaterialGameAudio {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playDiceClatter() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Multiple crisp wooden/resin taps
+                [0, 0.09, 0.19, 0.31, 0.44].forEach((delay, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    const freq = 320 + ((idx * 97) % 260);
+                    osc.frequency.setValueAtTime(freq, now + delay);
+                    osc.frequency.exponentialRampToValueAtTime(95, now + delay + 0.06);
+                    gain.gain.setValueAtTime(0.16 / (1 + idx * 0.25), now + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.065);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + delay);
+                    osc.stop(now + delay + 0.07);
+                });
+            }
+
+            playHop(stepIndex = 0) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const base = 360 + (stepIndex % 6) * 45;
+                osc.frequency.setValueAtTime(base, now);
+                osc.frequency.exponentialRampToValueAtTime(base * 1.45, now + 0.09);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            }
+
+            playLadderClimb() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const notes = [440, 554.37, 659.25, 880, 1108.73];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.11);
+                    gain.gain.setValueAtTime(0.14, now + idx * 0.11);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.11 + 0.22);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.11);
+                    osc.stop(now + idx * 0.11 + 0.24);
+                });
+            }
+
+            playSnakeSwallow() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                // 1. Sharp jaw snap & gulp
+                const gulp = this.ctx.createOscillator();
+                const gulpGain = this.ctx.createGain();
+                gulp.type = 'sawtooth';
+                gulp.frequency.setValueAtTime(280, now);
+                gulp.frequency.exponentialRampToValueAtTime(58, now + 0.32);
+                gulpGain.gain.setValueAtTime(0.24, now);
+                gulpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                gulp.connect(gulpGain);
+                gulpGain.connect(this.ctx.destination);
+                gulp.start(now);
+                gulp.stop(now + 0.36);
+
+                // 2. Descending peristaltic slither digesting sound
+                const slide = this.ctx.createOscillator();
+                const slideGain = this.ctx.createGain();
+                slide.type = 'sine';
+                slide.frequency.setValueAtTime(420, now + 0.3);
+                slide.frequency.exponentialRampToValueAtTime(95, now + 1.65);
+                slideGain.gain.setValueAtTime(0.16, now + 0.3);
+                slideGain.gain.exponentialRampToValueAtTime(0.001, now + 1.7);
+                slide.connect(slideGain);
+                slideGain.connect(this.ctx.destination);
+                slide.start(now + 0.3);
+                slide.stop(now + 1.72);
+
+                // 3. Pop out at tail
+                const pop = this.ctx.createOscillator();
+                const popGain = this.ctx.createGain();
+                pop.type = 'sine';
+                pop.frequency.setValueAtTime(180, now + 1.72);
+                pop.frequency.exponentialRampToValueAtTime(520, now + 1.84);
+                popGain.gain.setValueAtTime(0.18, now + 1.72);
+                popGain.gain.exponentialRampToValueAtTime(0.001, now + 1.88);
+                pop.connect(popGain);
+                popGain.connect(this.ctx.destination);
+                pop.start(now + 1.72);
+                pop.stop(now + 1.9);
+            }
+
+            playVictory() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.12);
+                    gain.gain.setValueAtTime(0.18, now + i * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.45);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.12);
+                    osc.stop(now + i * 0.12 + 0.48);
+                });
+            }
+        }
+
+        const sfx = new MaterialGameAudio();
+
+        /***********************************************************************
+         * 2. BOARD DEFINITIONS, SNAKES, LADDERS & PLAYER CONFIG
+         ***********************************************************************/
+        const TILE_SIZE = 2.0;
+        const BOARD_HALF = (10 * TILE_SIZE) / 2 - TILE_SIZE / 2; // 9.0
+
+        // 7 Golden Ladders (start -> end)
+        const LADDERS = [
+            { from: 4, to: 25 },
+            { from: 13, to: 46 },
+            { from: 33, to: 49 },
+            { from: 42, to: 63 },
+            { from: 50, to: 69 },
+            { from: 62, to: 81 },
+            { from: 74, to: 92 }
+        ];
+
+        // 7 Vibrant 3D Serpents (head -> tail)
+        const SNAKES = [
+            { head: 27, tail: 5,  color: 0x10b981, belly: 0xa7f3d0, name: 'Emerald Viper' },
+            { head: 40, tail: 3,  color: 0x8b5cf6, belly: 0xddd6fe, name: 'Amethyst Cobra' },
+            { head: 43, tail: 18, color: 0xf97316, belly: 0xfed7aa, name: 'Coral Mamba' },
+            { head: 54, tail: 31, color: 0x06b6d4, belly: 0xa5f3fc, name: 'Cyan Python' },
+            { head: 66, tail: 45, color: 0xec4899, belly: 0xfbcfe8, name: 'Magenta Adder' },
+            { head: 89, tail: 53, color: 0xef4444, belly: 0xfecaca, name: 'Crimson Boa' },
+            { head: 98, tail: 41, color: 0xeab308, belly: 0xfef08a, name: 'Golden Anaconda' }
+        ];
+
+        const PLAYER_CONFIGS = [
+            { id: 0, name: 'Player 1', colorHex: '#EF4444', threeColor: 0xef4444, badgeBg: 'bg-rose-500' },
+            { id: 1, name: 'Player 2', colorHex: '#3B82F6', threeColor: 0x3b82f6, badgeBg: 'bg-blue-500' },
+            { id: 2, name: 'Player 3', colorHex: '#10B981', threeColor: 0x10b981, badgeBg: 'bg-emerald-500' },
+            { id: 3, name: 'Player 4', colorHex: '#F59E0B', threeColor: 0xf59e0b, badgeBg: 'bg-amber-500' }
+        ];
+
+        let numPlayers = 2; // Selectable: 2, 3, or 4
+        let currentPlayerIndex = 0;
+        let isTurnBusy = false;
+        let players = [];
+
+        // Three.js Globals
+        let scene, camera, renderer, clock;
+        const snakeObjects = {}; // headSquare -> { curve, headGroup, jawPivot, bulgeMesh, ... }
+        const ladderCurves = {}; // fromSquare -> { startVec, endVec }
+        const activeParticles = [];
+        let diceMesh = null;
+        let diceShadowMesh = null;
+
+        // Camera Orbit State
+        const camState = {
+            isDragging: false,
+            prevX: 0,
+            prevY: 0,
+            theta: 0,
+            phi: 0.78,
+            radius: 27.5,
+            targetTheta: 0,
+            targetPhi: 0.78,
+            targetRadius: 27.5,
+            lookAt: new THREE.Vector3(0, 0, 0.5)
+        };
+
+        /***********************************************************************
+         * 3. CRYPTOGRAPHICALLY UNBIASED RANDOM DICE GENERATOR (NO PATTERNS)
+         ***********************************************************************/
+        /**
+         * Uses window.crypto.getRandomValues with rejection sampling so every
+         * roll (1..6) is strictly uniform and completely independent of prior rolls.
+         */
+        function getTrueRandomDiceValue() {
+            if (window.crypto && window.crypto.getRandomValues) {
+                const array = new Uint32Array(1);
+                // 4294967292 is the largest multiple of 6 fitting in 32-bit unsigned int
+                const maxUnbiased = 4294967292;
+                let rand;
+                do {
+                    window.crypto.getRandomValues(array);
+                    rand = array[0];
+                } while (rand >= maxUnbiased);
+                return (rand % 6) + 1;
+            }
+            return Math.floor(Math.random() * 6) + 1;
+        }
+
+        function getRandomFloat(min, max) {
+            if (window.crypto && window.crypto.getRandomValues) {
+                const arr = new Uint32Array(1);
+                window.crypto.getRandomValues(arr);
+                return min + (arr[0] / 4294967296) * (max - min);
+            }
+            return min + Math.random() * (max - min);
+        }
+
+        /***********************************************************************
+         * 4. BOARD COORDINATE MAPPING & PROCEDURAL TILE TEXTURES
+         ***********************************************************************/
+        /**
+         * Converts square number (1..100) to 3D world coordinates following
+         * classic Boustrophedon (zig-zag) Snakes & Ladders numbering.
+         */
+        function squareToWorld(sq) {
+            if (sq <= 1) sq = 1;
+            if (sq > 100) sq = 100;
+            const idx = sq - 1;
+            const row = Math.floor(idx / 10); // 0 (bottom) .. 9 (top)
+            const colInRow = idx % 10;
+            const col = row % 2 === 0 ? colInRow : 9 - colInRow;
+
+            const x = col * TILE_SIZE - BOARD_HALF;
+            const z = (9 - row) * TILE_SIZE - BOARD_HALF;
+            return new THREE.Vector3(x, 0.2, z);
+        }
+
+        /**
+         * Computes slight offset for multiple pawns standing on the same tile
+         */
+        function getPlayerSlotOffset(playerIdx, totalOnTile) {
+            if (totalOnTile <= 1) return new THREE.Vector3(0, 0, 0);
+            const angle = (playerIdx * Math.PI * 2) / 4 + Math.PI / 4;
+            const r = 0.42;
+            return new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+        }
+
+        function createTileTexture(number, bgColor, textColor, specialLabel = '') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Tile Fill
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Subtle Material inner border
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.08)';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(8, 8, 240, 240);
+
+            // Tile Number
+            ctx.fillStyle = textColor;
+            ctx.font = '800 76px Outfit, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(String(number), 24, 20);
+
+            if (specialLabel) {
+                ctx.font = '700 32px Inter, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(specialLabel, 232, 232);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        /***********************************************************************
+         * 5. 3D SCENE, 100-TILE BOARD, LADDERS & SERPENTS BUILDER
+         ***********************************************************************/
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf1f5f9);
+            scene.fog = new THREE.FogExp2(0xf1f5f9, 0.011);
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 150);
+            clock = new THREE.Clock();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05;
+            container.appendChild(renderer.domElement);
+
+            // Clean Minimalist Studio Lighting
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcbd5e1, 0.85);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+            dirLight.position.set(14, 28, 18);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 5;
+            dirLight.shadow.camera.far = 65;
+            const d = 14;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            dirLight.shadow.bias = -0.0005;
+            scene.add(dirLight);
+
+            buildStudioFloorAndBoard();
+            build3DLadders();
+            build3DSnakes();
+            build3DDice();
+            initPlayers(numPlayers);
+
+            // Viewport Pointer Events
+            window.addEventListener('resize', onWindowResize);
+            const dom = renderer.domElement;
+            dom.addEventListener('pointerdown', (e) => {
+                camState.isDragging = true;
+                camState.prevX = e.clientX;
+                camState.prevY = e.clientY;
+            });
+            window.addEventListener('pointermove', (e) => {
+                if (!camState.isDragging) return;
+                const dx = e.clientX - camState.prevX;
+                const dy = e.clientY - camState.prevY;
+                camState.prevX = e.clientX;
+                camState.prevY = e.clientY;
+                camState.targetTheta -= dx * 0.006;
+                camState.targetPhi = Math.max(0.18, Math.min(1.25, camState.targetPhi - dy * 0.005));
+            });
+            window.addEventListener('pointerup', () => {
+                camState.isDragging = false;
+            });
+            dom.addEventListener('wheel', (e) => {
+                camState.targetRadius = Math.max(16, Math.min(40, camState.targetRadius + e.deltaY * 0.015));
+            }, { passive: true });
+        }
+
+        function buildStudioFloorAndBoard() {
+            // Soft Minimalist Pedestal Table
+            const floorGeo = new THREE.PlaneGeometry(160, 160);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9, metalness: 0.05 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -0.65;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Outer Rounded-Feel Board Base Frame
+            const frameGeo = new THREE.BoxGeometry(10 * TILE_SIZE + 1.2, 0.7, 10 * TILE_SIZE + 1.2);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x1e293b,
+                roughness: 0.4,
+                metalness: 0.15
+            });
+            const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+            frameMesh.position.y = -0.22;
+            frameMesh.receiveShadow = true;
+            frameMesh.castShadow = true;
+            scene.add(frameMesh);
+
+            // Lookup maps for special square badges
+            const ladderStarts = new Set(LADDERS.map(l => l.from));
+            const snakeHeads = new Set(SNAKES.map(s => s.head));
+
+            const tileGeo = new THREE.BoxGeometry(TILE_SIZE * 0.96, 0.36, TILE_SIZE * 0.96);
+            const sideMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.6 });
+
+            for (let sq = 1; sq <= 100; sq++) {
+                const pos = squareToWorld(sq);
+                const isEven = sq % 2 === 0;
+
+                let bg = isEven ? '#F8FAFC' : '#EEF2FF';
+                let fg = isEven ? '#334155' : '#3730A3';
+                let badge = '';
+
+                if (sq === 100) {
+                    bg = '#FEF3C7';
+                    fg = '#B45309';
+                    badge = '★ CROWN';
+                } else if (sq === 1) {
+                    bg = '#DBEAFE';
+                    fg = '#1D4ED8';
+                    badge = 'START';
+                } else if (ladderStarts.has(sq)) {
+                    bg = '#FEF9C3';
+                    fg = '#854D0E';
+                    badge = '▲ UP';
+                } else if (snakeHeads.has(sq)) {
+                    bg = '#FFE4E6';
+                    fg = '#9F1239';
+                    badge = '▼ VIPER';
+                }
+
+                const topTex = createTileTexture(sq, bg, fg, badge);
+                const topMat = new THREE.MeshStandardMaterial({
+                    map: topTex,
+                    roughness: 0.35,
+                    metalness: 0.05
+                });
+
+                const materials = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
+                const tileMesh = new THREE.Mesh(tileGeo, materials);
+                tileMesh.position.set(pos.x, 0, pos.z);
+                tileMesh.receiveShadow = true;
+                scene.add(tileMesh);
+            }
+        }
+
+        function build3DLadders() {
+            const railMat = new THREE.MeshStandardMaterial({
+                color: 0xf59e0b,
+                roughness: 0.28,
+                metalness: 0.65
+            });
+            const rungMat = new THREE.MeshStandardMaterial({
+                color: 0xfbbf24,
+                roughness: 0.32,
+                metalness: 0.5
+            });
+
+            LADDERS.forEach((lad) => {
+                const start = squareToWorld(lad.from).add(new THREE.Vector3(0, 0.08, 0));
+                const end = squareToWorld(lad.to).add(new THREE.Vector3(0, 0.08, 0));
+                ladderCurves[lad.from] = { startVec: start.clone(), endVec: end.clone() };
+
+                const dir = new THREE.Vector3().subVectors(end, start);
+                const length = dir.length();
+                const dirNorm = dir.clone().normalize();
+
+                // Perpendicular vector on XZ plane for the two side rails
+                const perp = new THREE.Vector3(-dirNorm.z, 0, dirNorm.x).normalize().multiplyScalar(0.32);
+
+                const ladderGroup = new THREE.Group();
+
+                [-1, 1].forEach((side) => {
+                    const railStart = start.clone().addScaledVector(perp, side);
+                    const railEnd = end.clone().addScaledVector(perp, side);
+                    const railMid = new THREE.Vector3().addVectors(railStart, railEnd).multiplyScalar(0.5);
+
+                    const railGeo = new THREE.CylinderGeometry(0.065, 0.065, length, 12);
+                    const railMesh = new THREE.Mesh(railGeo, railMat);
+                    railMesh.position.copy(railMid);
+                    railMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirNorm);
+                    railMesh.castShadow = true;
+                    ladderGroup.add(railMesh);
+                });
+
+                // Rungs along the ladder
+                const numRungs = Math.max(3, Math.floor(length / 0.85));
+                for (let i = 1; i < numRungs; i++) {
+                    const t = i / numRungs;
+                    const rungCenter = new THREE.Vector3().lerpVectors(start, end, t);
+                    const rungGeo = new THREE.CylinderGeometry(0.048, 0.048, 0.64, 10);
+                    const rungMesh = new THREE.Mesh(rungGeo, rungMat);
+                    rungMesh.position.copy(rungCenter);
+                    rungMesh.quaternion.setFromUnitVectors(
+                        new THREE.Vector3(0, 1, 0),
+                        perp.clone().normalize()
+                    );
+                    rungMesh.castShadow = true;
+                    ladderGroup.add(rungMesh);
+                }
+
+                scene.add(ladderGroup);
+            });
+        }
+
+        /**
+         * Builds sinuous 3D Snakes with an articulated jaw, eyes, tongue,
+         * and a swallow-bulge sphere that travels down the spline when a player is eaten!
+         */
+        function build3DSnakes() {
+            SNAKES.forEach((snk, idx) => {
+                const headPos = squareToWorld(snk.head);
+                const tailPos = squareToWorld(snk.tail);
+
+                // Create a multi-point S-curve between head and tail
+                const dir = new THREE.Vector3().subVectors(tailPos, headPos);
+                const perp = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+                const waveAmp = 1.35 + (idx % 2) * 0.45;
+
+                const p0 = headPos.clone().add(new THREE.Vector3(0, 0.35, 0));
+                const p1 = new THREE.Vector3().lerpVectors(headPos, tailPos, 0.25)
+                    .addScaledVector(perp, waveAmp)
+                    .add(new THREE.Vector3(0, 0.38, 0));
+                const p2 = new THREE.Vector3().lerpVectors(headPos, tailPos, 0.55)
+                    .addScaledVector(perp, -waveAmp * 0.9)
+                    .add(new THREE.Vector3(0, 0.32, 0));
+                const p3 = new THREE.Vector3().lerpVectors(headPos, tailPos, 0.82)
+                    .addScaledVector(perp, waveAmp * 0.55)
+                    .add(new THREE.Vector3(0, 0.24, 0));
+                const p4 = tailPos.clone().add(new THREE.Vector3(0, 0.14, 0));
+
+                const curve = new THREE.CatmullRomCurve3([p0, p1, p2, p3, p4]);
+
+                const bodyMat = new THREE.MeshStandardMaterial({
+                    color: snk.color,
+                    roughness: 0.32,
+                    metalness: 0.12
+                });
+
+                const bellyMat = new THREE.MeshStandardMaterial({
+                    color: snk.belly,
+                    roughness: 0.4,
+                    metalness: 0.08
+                });
+
+                // Tube body
+                const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.26, 16, false);
+                const tubeMesh = new THREE.Mesh(tubeGeo, bodyMat);
+                tubeMesh.castShadow = true;
+                tubeMesh.receiveShadow = true;
+                scene.add(tubeMesh);
+
+                // Decorative Dorsal Scale Rings along the snake body
+                for (let s = 1; s < 14; s++) {
+                    const t = s / 15;
+                    const pt = curve.getPointAt(t);
+                    const tang = curve.getTangentAt(t);
+                    const scaleRadius = 0.27 * (1 - t * 0.38);
+                    const ringGeo = new THREE.TorusGeometry(scaleRadius, 0.035, 8, 16);
+                    const ringMesh = new THREE.Mesh(ringGeo, bellyMat);
+                    ringMesh.position.copy(pt);
+                    ringMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tang);
+                    scene.add(ringMesh);
+                }
+
+                // Tapered Tail Tip Cone
+                const tailTangent = curve.getTangentAt(0.98);
+                const tailTipGeo = new THREE.ConeGeometry(0.22, 0.65, 12);
+                const tailTip = new THREE.Mesh(tailTipGeo, bodyMat);
+                tailTip.position.copy(p4);
+                tailTip.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tailTangent);
+                scene.add(tailTip);
+
+                // Articulated 3D Snake Head Group at p0
+                const headGroup = new THREE.Group();
+                headGroup.position.copy(p0);
+
+                // Orient head facing outward towards the tile center / approaching player
+                const neckTangent = curve.getTangentAt(0.02).negate();
+                neckTangent.y = 0;
+                if (neckTangent.lengthSq() < 0.001) neckTangent.set(0, 0, 1);
+                neckTangent.normalize();
+                headGroup.lookAt(p0.clone().add(neckTangent));
+
+                // Upper Cranium / Snout
+                const skullGeo = new THREE.SphereGeometry(0.42, 18, 14);
+                skullGeo.scale(0.95, 0.68, 1.35);
+                const skullMesh = new THREE.Mesh(skullGeo, bodyMat);
+                skullMesh.position.set(0, 0.08, 0.12);
+                skullMesh.castShadow = true;
+                headGroup.add(skullMesh);
+
+                // Glowing Slit Eyes
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+                const pupilMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+                [-0.24, 0.24].forEach((ex) => {
+                    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), eyeMat);
+                    eye.position.set(ex, 0.24, 0.22);
+                    headGroup.add(eye);
+
+                    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.08), pupilMat);
+                    pupil.position.set(ex * 1.05, 0.24, 0.31);
+                    headGroup.add(pupil);
+                });
+
+                // Articulated Lower Jaw & Fangs Pivot (Opens wide when swallowing a piece!)
+                const jawPivot = new THREE.Group();
+                jawPivot.position.set(0, -0.04, -0.05);
+
+                const lowerJawGeo = new THREE.SphereGeometry(0.36, 14, 12);
+                lowerJawGeo.scale(0.85, 0.42, 1.25);
+                const lowerJawMesh = new THREE.Mesh(lowerJawGeo, bellyMat);
+                lowerJawMesh.position.set(0, -0.05, 0.18);
+                jawPivot.add(lowerJawMesh);
+
+                // White Fangs on Upper Mouth Roof
+                const fangMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+                [-0.16, 0.16].forEach((fx) => {
+                    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.22, 8), fangMat);
+                    fang.rotation.x = Math.PI;
+                    fang.position.set(fx, -0.02, 0.42);
+                    headGroup.add(fang);
+                });
+
+                // Forked Crimson Tongue
+                const tongueMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+                const tongueMesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.48), tongueMat);
+                tongueMesh.position.set(0, 0, 0.55);
+                jawPivot.add(tongueMesh);
+
+                headGroup.add(jawPivot);
+                scene.add(headGroup);
+
+                // Peristaltic Digestive Bulge Sphere (Hidden until snake swallows a player!)
+                const bulgeGeo = new THREE.SphereGeometry(0.46, 18, 18);
+                const bulgeMat = new THREE.MeshStandardMaterial({
+                    color: snk.color,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.35,
+                    roughness: 0.25
+                });
+                const bulgeMesh = new THREE.Mesh(bulgeGeo, bulgeMat);
+                bulgeMesh.visible = false;
+                bulgeMesh.castShadow = true;
+                scene.add(bulgeMesh);
+
+                snakeObjects[snk.head] = {
+                    config: snk,
+                    curve,
+                    headGroup,
+                    jawPivot,
+                    tongueMesh,
+                    bulgeMesh,
+                    baseHeadPos: p0.clone(),
+                    baseHeadQuat: headGroup.quaternion.clone(),
+                    phase: idx * 1.3
+                };
+            });
+        }
+
+        /***********************************************************************
+         * 6. 3D DICE WITH EXACT FACE ROTATIONS & PLAYER PAWNS
+         ***********************************************************************/
+        function createDiceFaceTexture(value) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Crisp ivory-white die face
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 256, 256);
+
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 12;
+            ctx.strokeRect(6, 6, 244, 244);
+
+            // Pip coordinates
+            const pips = {
+                1: [[128, 128]],
+                2: [[72, 72], [184, 184]],
+                3: [[68, 68], [128, 128], [188, 188]],
+                4: [[72, 72], [184, 72], [72, 184], [184, 184]],
+                5: [[68, 68], [188, 68], [128, 128], [68, 188], [188, 188]],
+                6: [[72, 64], [184, 64], [72, 128], [184, 128], [72, 192], [184, 192]]
+            };
+
+            ctx.fillStyle = value === 1 || value === 4 ? '#ef4444' : '#1e293b';
+            (pips[value] || []).forEach(([px, py]) => {
+                ctx.beginPath();
+                ctx.arc(px, py, value === 1 ? 34 : 22, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function build3DDice() {
+            // Three.js BoxGeometry material order: +X (1), -X (6), +Y (2), -Y (5), +Z (3), -Z (4)
+            const faceValues = [1, 6, 2, 5, 3, 4];
+            const materials = faceValues.map(v => new THREE.MeshStandardMaterial({
+                map: createDiceFaceTexture(v),
+                roughness: 0.22,
+                metalness: 0.05
+            }));
+
+            const dieGeo = new THREE.BoxGeometry(1.45, 1.45, 1.45);
+            diceMesh = new THREE.Mesh(dieGeo, materials);
+            diceMesh.position.set(12.2, 0.95, 6.5);
+            diceMesh.castShadow = true;
+            diceMesh.receiveShadow = true;
+            scene.add(diceMesh);
+        }
+
+        /**
+         * Returns the exact Euler rotation so that `value` (1..6) faces straight UP (+Y)
+         * at the end of a 3D physics tumble.
+         */
+        function getTopFaceEulerForValue(value, extraSpinsY = 0) {
+            switch (value) {
+                case 2: return new THREE.Euler(0, extraSpinsY, 0);                     // +Y is already top
+                case 5: return new THREE.Euler(Math.PI, extraSpinsY, 0);               // -Y to +Y
+                case 1: return new THREE.Euler(0, extraSpinsY, Math.PI / 2);           // +X to +Y
+                case 6: return new THREE.Euler(0, extraSpinsY, -Math.PI / 2);          // -X to +Y
+                case 3: return new THREE.Euler(-Math.PI / 2, extraSpinsY, 0);          // +Z to +Y
+                case 4: return new THREE.Euler(Math.PI / 2, extraSpinsY, 0);           // -Z to +Y
+                default: return new THREE.Euler(0, 0, 0);
+            }
+        }
+
+        function createPlayerPawnMesh(config) {
+            const group = new THREE.Group();
+
+            const mat = new THREE.MeshStandardMaterial({
+                color: config.threeColor,
+                roughness: 0.22,
+                metalness: 0.18
+            });
+
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.3,
+                metalness: 0.4
+            });
+
+            // Base pedestal
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.18, 24), mat);
+            base.position.y = 0.09;
+            base.castShadow = true;
+            group.add(base);
+
+            // White Material collar ring
+            const collar = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.045, 10, 24), ringMat);
+            collar.rotation.x = Math.PI / 2;
+            collar.position.y = 0.2;
+            group.add(collar);
+
+            // Tapered body
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.38, 0.65, 20), mat);
+            body.position.y = 0.52;
+            body.castShadow = true;
+            group.add(body);
+
+            // Spherical head
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 20), mat);
+            head.position.y = 0.98;
+            head.castShadow = true;
+            group.add(head);
+
+            return group;
+        }
+
+        function initPlayers(count) {
+            // Remove existing player meshes
+            players.forEach(p => {
+                if (p.mesh) scene.remove(p.mesh);
+            });
+            players = [];
+
+            for (let i = 0; i < count; i++) {
+                const cfg = PLAYER_CONFIGS[i];
+                const mesh = createPlayerPawnMesh(cfg);
+                scene.add(mesh);
+                players.push({
+                    ...cfg,
+                    square: 1,
+                    mesh
+                });
+            }
+
+            currentPlayerIndex = 0;
+            isTurnBusy = false;
+            repositionAllPawnsInstant();
+            renderPlayerCardsUI();
+            updateTurnBanner(`${players[0].name}'s Turn — Roll the 3D Die!`, players[0].colorHex);
+        }
+
+        function repositionAllPawnsInstant() {
+            const groupsBySquare = {};
+            players.forEach(p => {
+                if (!groupsBySquare[p.square]) groupsBySquare[p.square] = [];
+                groupsBySquare[p.square].push(p);
+            });
+
+            players.forEach(p => {
+                const sqGroup = groupsBySquare[p.square];
+                const basePos = squareToWorld(p.square);
+                const offset = getPlayerSlotOffset(p.id, sqGroup.length);
+                p.mesh.position.copy(basePos).add(offset);
+                p.mesh.scale.set(1, 1, 1);
+                p.mesh.rotation.set(0, 0, 0);
+            });
+        }
+
+        /***********************************************************************
+         * 7. CUSTOM ANIMATIONS: DICE ROLL, HOPPING, LADDER & SNAKE SWALLOW!
+         ***********************************************************************/
+        function spawnBurstParticles(worldPos, colorHex, count = 18) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.OctahedronGeometry(0.12, 0);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 1
+                });
+                const m = new THREE.Mesh(geo, mat);
+                m.position.copy(worldPos).add(new THREE.Vector3(0, 0.4, 0));
+                scene.add(m);
+                activeParticles.push({
+                    mesh: m,
+                    vel: new THREE.Vector3(
+                        (Math.random() - 0.5) * 6,
+                        2.5 + Math.random() * 4.5,
+                        (Math.random() - 0.5) * 6
+                    ),
+                    life: 1.0
+                });
+            }
+        }
+
+        /**
+         * Animates the 3D die leaping above the board, tumbling with randomized spin,
+         * and landing cleanly on the cryptographically chosen random face (1..6).
+         */
+        function animate3DDiceRoll(resultValue) {
+            return new Promise((resolve) => {
+                sfx.playDiceClatter();
+                const duration = 0.78;
+                const startTime = performance.now();
+
+                // Random landing spot near the right side or center-front of the board
+                const startPos = diceMesh.position.clone();
+                const endPos = new THREE.Vector3(
+                    getRandomFloat(-3.5, 3.5),
+                    0.92,
+                    getRandomFloat(-2.5, 4.5)
+                );
+
+                // Randomize multiple full 360-degree spins so no two rolls look alike
+                const spinsX = (2 + Math.floor(getRandomFloat(0, 3))) * Math.PI * 2;
+                const spinsZ = (2 + Math.floor(getRandomFloat(0, 3))) * Math.PI * 2;
+                const yawAngle = getRandomFloat(-0.4, 0.4);
+
+                const finalEuler = getTopFaceEulerForValue(resultValue, yawAngle);
+                const startEuler = diceMesh.rotation.clone();
+
+                function step(now) {
+                    const t = Math.min((now - startTime) / (duration * 1000), 1);
+                    const easeOut = 1 - Math.pow(1 - t, 3);
+
+                    // XZ interpolation
+                    diceMesh.position.x = THREE.MathUtils.lerp(startPos.x, endPos.x, easeOut);
+                    diceMesh.position.z = THREE.MathUtils.lerp(startPos.z, endPos.z, easeOut);
+
+                    // Two-bounce parabolic Y arc
+                    let yArc = 0;
+                    if (t < 0.68) {
+                        const bt = t / 0.68;
+                        yArc = Math.sin(bt * Math.PI) * 5.2;
+                    } else {
+                        const bt = (t - 0.68) / 0.32;
+                        yArc = Math.sin(bt * Math.PI) * 1.35;
+                    }
+                    diceMesh.position.y = 0.92 + yArc;
+
+                    // Interpolate multi-axis tumble into exact target face orientation
+                    diceMesh.rotation.x = THREE.MathUtils.lerp(startEuler.x + spinsX, finalEuler.x, easeOut);
+                    diceMesh.rotation.y = THREE.MathUtils.lerp(startEuler.y, finalEuler.y, easeOut);
+                    diceMesh.rotation.z = THREE.MathUtils.lerp(startEuler.z + spinsZ, finalEuler.z, easeOut);
+
+                    if (t < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        diceMesh.rotation.copy(finalEuler);
+                        diceMesh.position.copy(endPos);
+                        resolve();
+                    }
+                }
+
+                requestAnimationFrame(step);
+            });
+        }
+
+        /**
+         * Step-by-step tile hopping animation
+         */
+        async function animatePawnSteps(player, fromSq, toSq) {
+            for (let nextSq = fromSq + 1; nextSq <= toSq; nextSq++) {
+                await new Promise((resolve) => {
+                    sfx.playHop(nextSq - fromSq);
+                    const startPos = player.mesh.position.clone();
+                    const endPos = squareToWorld(nextSq);
+                    const duration = 230;
+                    const startTime = performance.now();
+
+                    function hopFrame(now) {
+                        const t = Math.min((now - startTime) / duration, 1);
+                        player.mesh.position.lerpVectors(startPos, endPos, t);
+                        player.mesh.position.y = endPos.y + Math.sin(t * Math.PI) * 1.15;
+
+                        // Playful squash & stretch during hop
+                        const stretch = 1 + Math.sin(t * Math.PI) * 0.18;
+                        player.mesh.scale.set(1 / Math.sqrt(stretch), stretch, 1 / Math.sqrt(stretch));
+
+                        if (t < 1) {
+                            requestAnimationFrame(hopFrame);
+                        } else {
+                            player.square = nextSq;
+                            player.mesh.scale.set(1, 1, 1);
+                            renderPlayerCardsUI();
+                            resolve();
+                        }
+                    }
+                    requestAnimationFrame(hopFrame);
+                });
+            }
+        }
+
+        /**
+         * Golden Spire Ladder Ascension Animation
+         */
+        function animateLadderAscent(player, fromSq, toSq) {
+            return new Promise((resolve) => {
+                sfx.playLadderClimb();
+                const startPos = squareToWorld(fromSq);
+                const endPos = squareToWorld(toSq);
+                spawnBurstParticles(startPos, 0xf59e0b, 16);
+
+                const duration = 950;
+                const startTime = performance.now();
+
+                function climbFrame(now) {
+                    const t = Math.min((now - startTime) / duration, 1);
+                    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+                    player.mesh.position.lerpVectors(startPos, endPos, ease);
+                    // Rung-by-rung stepping bounce
+                    player.mesh.position.y += Math.abs(Math.sin(t * Math.PI * 6)) * 0.35;
+                    player.mesh.rotation.y = t * Math.PI * 2;
+
+                    if (t < 1) {
+                        requestAnimationFrame(climbFrame);
+                    } else {
+                        player.square = toSq;
+                        player.mesh.rotation.set(0, 0, 0);
+                        spawnBurstParticles(endPos, 0xfbbf24, 22);
+                        renderPlayerCardsUI();
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(climbFrame);
+            });
+        }
+
+        /**
+         * CUSTOM 3D SNAKE SWALLOW & PERISTALTIC DIGESTION ANIMATION:
+         * Phase 1 (Jaw Lunge & Gulp): The 3D snake rears its head, opens its hinged jaws wide,
+         *         lunges at the pawn, and sucks the spinning/shrinking pawn into its mouth.
+         * Phase 2 (Digestive Bulge Travel): A glowing 3D peristaltic bulge travels all the way down
+         *         the snake's curved 3D body tube from head to tail while the pawn travels inside.
+         * Phase 3 (Tail Ejection Pop): The pawn pops out of the tail onto the lower square,
+         *         bounces with a dizzy wobble, and recovers!
+         */
+        function animateSnakeSwallow(player, headSq, tailSq) {
+            return new Promise((resolve) => {
+                const snkObj = snakeObjects[headSq];
+                if (!snkObj) {
+                    player.square = tailSq;
+                    repositionAllPawnsInstant();
+                    resolve();
+                    return;
+                }
+
+                sfx.playSnakeSwallow();
+                const { curve, headGroup, jawPivot, bulgeMesh, baseHeadPos } = snkObj;
+                const pawnStartPos = player.mesh.position.clone();
+                const mouthPos = baseHeadPos.clone().add(new THREE.Vector3(0, 0.15, 0));
+                const tailLandingPos = squareToWorld(tailSq);
+
+                // Color of bulge matches the swallowed player's color mixed with snake
+                bulgeMesh.material.emissive.setHex(player.threeColor);
+
+                const totalDuration = 2150; // ms
+                const startTime = performance.now();
+                let burstTriggered = false;
+
+                function swallowFrame(now) {
+                    const elapsed = now - startTime;
+                    const t = Math.min(elapsed / totalDuration, 1);
+
+                    if (t < 0.28) {
+                        // PHASE 1: Snake Jaws Open Wide + Lunge + Pawn Sucked Into Mouth
+                        const p1 = t / 0.28;
+                        const jawOpenAngle = Math.sin(p1 * Math.PI) * 0.95; // Wide open jaw
+                        jawPivot.rotation.x = jawOpenAngle;
+
+                        // Snake head lunges slightly up and forward
+                        headGroup.scale.setScalar(1 + Math.sin(p1 * Math.PI) * 0.28);
+
+                        // Pawn gets lifted in a vortex spiral and shrinks into the open jaws
+                        const suckEase = p1 * p1;
+                        player.mesh.position.lerpVectors(pawnStartPos, mouthPos, suckEase);
+                        player.mesh.position.y += Math.sin(p1 * Math.PI) * 0.95;
+
+                        // Frantic spin & spaghettification stretch as it enters mouth
+                        player.mesh.rotation.y = p1 * Math.PI * 6;
+                        player.mesh.rotation.z = Math.sin(p1 * Math.PI * 4) * 0.45;
+                        const shrink = Math.max(0.05, 1 - Math.pow(p1, 1.6));
+                        player.mesh.scale.set(shrink * 0.8, shrink * 1.35, shrink * 0.8);
+
+                        if (p1 > 0.82 && !burstTriggered) {
+                            burstTriggered = true;
+                            spawnBurstParticles(mouthPos, player.threeColor, 16);
+                        }
+                    } else if (t < 0.82) {
+                        // PHASE 2: Peristaltic Bulge Travels Inside the Snake's 3D Tube Curve
+                        const p2 = (t - 0.28) / (0.82 - 0.28);
+                        jawPivot.rotation.x = 0;
+                        headGroup.scale.setScalar(1);
+                        player.mesh.visible = false;
+
+                        bulgeMesh.visible = true;
+                        const curvePoint = curve.getPointAt(p2);
+                        bulgeMesh.position.copy(curvePoint);
+
+                        // Pulsing digestive squeeze scale
+                        const pulse = 1 + Math.sin(p2 * Math.PI * 8) * 0.22;
+                        const taper = 1 - p2 * 0.28;
+                        bulgeMesh.scale.set(pulse * taper, pulse * taper, pulse * taper);
+                    } else {
+                        // PHASE 3: Pawn Pops Out of Snake Tail & Bounces to Recovery
+                        const p3 = (t - 0.82) / (1 - 0.82);
+                        bulgeMesh.visible = false;
+                        player.mesh.visible = true;
+
+                        const tailTipPos = curve.getPointAt(0.98);
+                        if (p3 < 0.15 && burstTriggered) {
+                            burstTriggered = false;
+                            spawnBurstParticles(tailTipPos, snkObj.config.color, 18);
+                        }
+
+                        player.mesh.position.lerpVectors(tailTipPos, tailLandingPos, p3);
+                        player.mesh.position.y = tailLandingPos.y + Math.sin(p3 * Math.PI) * 1.25;
+
+                        // Elastic pop-in scale & dizzy wobble recovery
+                        const scalePop = Math.min(1, p3 * 1.45);
+                        player.mesh.scale.setScalar(scalePop);
+                        player.mesh.rotation.z = Math.sin(p3 * Math.PI * 4) * (1 - p3) * 0.5;
+                        player.mesh.rotation.y = (1 - p3) * Math.PI * 2;
+                    }
+
+                    if (t < 1) {
+                        requestAnimationFrame(swallowFrame);
+                    } else {
+                        // Clean reset after digestion completes
+                        jawPivot.rotation.x = 0;
+                        headGroup.scale.setScalar(1);
+                        bulgeMesh.visible = false;
+                        player.mesh.visible = true;
+                        player.mesh.scale.set(1, 1, 1);
+                        player.mesh.rotation.set(0, 0, 0);
+                        player.square = tailSq;
+                        repositionAllPawnsInstant();
+                        renderPlayerCardsUI();
+                        resolve();
+                    }
+                }
+
+                requestAnimationFrame(swallowFrame);
+            });
+        }
+
+        /***********************************************************************
+         * 8. TURN CONTROLLER & UI UPDATES
+         ***********************************************************************/
+        async function triggerDiceRoll() {
+            if (isTurnBusy) return;
+            isTurnBusy = true;
+
+            const rollBtn = document.getElementById('btn-roll');
+            rollBtn.disabled = true;
+            rollBtn.classList.remove('roll-cta-pulse');
+
+            const player = players[currentPlayerIndex];
+
+            // Generate cryptographically unbiased random dice value (1..6)
+            const diceVal = getTrueRandomDiceValue();
+            document.getElementById('dice-value-badge').textContent = '...';
+            updateTurnBanner(`${player.name} is rolling the die...`, player.colorHex);
+
+            await animate3DDiceRoll(diceVal);
+            document.getElementById('dice-value-badge').textContent = diceVal;
+
+            const targetSq = player.square + diceVal;
+
+            if (targetSq > 100) {
+                updateTurnBanner(`${player.name} rolled ${diceVal} — needs exact roll for 100!`, player.colorHex);
+                await new Promise(r => setTimeout(r, 900));
+            } else {
+                updateTurnBanner(`${player.name} rolled ${diceVal} — advancing to ${targetSq}`, player.colorHex);
+                await animatePawnSteps(player, player.square, targetSq);
+
+                // Check for Ladder at landing square
+                const hitLadder = LADDERS.find(l => l.from === player.square);
+                if (hitLadder) {
+                    updateTurnBanner(`Golden Spire! ${player.name} climbs ${hitLadder.from} → ${hitLadder.to}!`, '#F59E0B');
+                    await animateLadderAscent(player, hitLadder.from, hitLadder.to);
+                }
+
+                // Check for Hungry Snake at landing square
+                const hitSnake = SNAKES.find(s => s.head === player.square);
+                if (hitSnake) {
+                    updateTurnBanner(`Oh no! Swallowed by the ${hitSnake.name} (${hitSnake.head} → ${hitSnake.tail})!`, '#10B981');
+                    await animateSnakeSwallow(player, hitSnake.head, hitSnake.tail);
+                }
+
+                repositionAllPawnsInstant();
+
+                // Check for Victory on Square 100
+                if (player.square === 100) {
+                    sfx.playVictory();
+                    spawnBurstParticles(squareToWorld(100), player.threeColor, 40);
+                    showVictoryModal(player);
+                    isTurnBusy = false;
+                    return;
+                }
+            }
+
+            // Advance turn (or grant bonus roll on a 6!)
+            if (diceVal === 6) {
+                updateTurnBanner(`Rolled a 6! ${player.name} gets a Bonus Roll!`, player.colorHex);
+            } else {
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                const nextPlayer = players[currentPlayerIndex];
+                updateTurnBanner(`${nextPlayer.name}'s Turn — Roll the 3D Die!`, nextPlayer.colorHex);
+            }
+
+            renderPlayerCardsUI();
+            rollBtn.disabled = false;
+            rollBtn.classList.add('roll-cta-pulse');
+            isTurnBusy = false;
+        }
+
+        function changePlayerCount(count) {
+            if (isTurnBusy) return;
+            numPlayers = count;
+
+            [2, 3, 4].forEach(n => {
+                const btn = document.getElementById(`pcount-${n}`);
+                if (n === count) {
+                    btn.className = 'm3-btn px-3 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 shadow-sm';
+                } else {
+                    btn.className = 'm3-btn px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 hover:text-slate-900';
+                }
+            });
+
+            document.getElementById('player-count-badge').textContent = `${count} Players`;
+            document.getElementById('dice-value-badge').textContent = '-';
+            initPlayers(count);
+        }
+
+        function renderPlayerCardsUI() {
+            const container = document.getElementById('player-cards-container');
+            if (!container) return;
+
+            container.innerHTML = players.map((p, idx) => {
+                const isTurn = idx === currentPlayerIndex;
+                return `
+                    <div class="flex items-center justify-between px-3 py-2 rounded-2xl transition-all duration-200 ${
+                        isTurn
+                            ? 'bg-white shadow-sm border border-slate-300 scale-[1.02]'
+                            : 'bg-slate-100/60 border border-transparent opacity-80'
+                    }">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-3.5 h-3.5 rounded-full ${p.badgeBg} shadow-sm"></span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                    ${p.name}
+                                    ${isTurn ? '<span class="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-extrabold">TURN</span>' : ''}
+                                </div>
+                                <div class="text-[11px] text-slate-500">Tile #${p.square} of 100</div>
+                            </div>
+                        </div>
+                        <span class="font-display font-extrabold text-sm text-slate-800 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200/80">
+                            ${p.square}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateTurnBanner(message, dotColorHex) {
+            const textEl = document.getElementById('event-text');
+            const dotEl = document.getElementById('event-dot');
+            if (textEl) textEl.textContent = message;
+            if (dotEl && dotColorHex) dotEl.style.backgroundColor = dotColorHex;
+        }
+
+        function setCameraView(preset) {
+            const btnIso = document.getElementById('cam-iso');
+            const btnTop = document.getElementById('cam-top');
+            if (preset === 'iso') {
+                camState.targetTheta = 0;
+                camState.targetPhi = 0.78;
+                camState.targetRadius = 27.5;
+                btnIso.className = 'm3-btn m3-chip-active px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-transparent';
+                btnTop.className = 'm3-btn px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:bg-slate-200/60 flex items-center gap-1 border border-transparent';
+            } else {
+                camState.targetTheta = 0;
+                camState.targetPhi = 0.18;
+                camState.targetRadius = 28.5;
+                btnTop.className = 'm3-btn m3-chip-active px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-transparent';
+                btnIso.className = 'm3-btn px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:bg-slate-200/60 flex items-center gap-1 border border-transparent';
+            }
+        }
+
+        function toggleAudio() {
+            sfx.enabled = !sfx.enabled;
+            const icon = document.getElementById('sound-icon');
+            icon.textContent = sfx.enabled ? 'volume_up' : 'volume_off';
+        }
+
+        function showVictoryModal(winner) {
+            const modal = document.getElementById('victory-modal');
+            document.getElementById('victory-title').textContent = `${winner.name} Wins!`;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeVictoryModal() {
+            const modal = document.getElementById('victory-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function resetGame() {
+            if (isTurnBusy) return;
+            closeVictoryModal();
+            document.getElementById('dice-value-badge').textContent = '-';
+            const rollBtn = document.getElementById('btn-roll');
+            rollBtn.disabled = false;
+            rollBtn.classList.add('roll-cta-pulse');
+            initPlayers(numPlayers);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /***********************************************************************
+         * 9. MAIN ANIMATION LOOP (IDLE SNAKE BREATHING, PARTICLES & CAMERA)
+         ***********************************************************************/
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Subtle Idle Breathing & Tongue Flicker for All 7 3D Snakes
+            Object.values(snakeObjects).forEach((snk) => {
+                const wave = Math.sin(elapsed * 2.4 + snk.phase);
+                snk.headGroup.position.y = snk.baseHeadPos.y + wave * 0.045;
+                // Flickering forked tongue
+                snk.tongueMesh.scale.z = 0.65 + Math.abs(Math.sin(elapsed * 7 + snk.phase)) * 0.65;
+            });
+
+            // 2. Active Turn Player Gentle Bobbing
+            if (!isTurnBusy && players[currentPlayerIndex]) {
+                const activePawn = players[currentPlayerIndex].mesh;
+                activePawn.position.y = 0.2 + Math.abs(Math.sin(elapsed * 4.2)) * 0.14;
+            }
+
+            // 3. Update Burst Particles
+            for (let i = activeParticles.length - 1; i >= 0; i--) {
+                const p = activeParticles[i];
+                p.life -= dt * 1.8;
+                p.vel.y -= 14 * dt;
+                p.mesh.position.addScaledVector(p.vel, dt);
+                p.mesh.rotation.x += 5 * dt;
+                p.mesh.rotation.y += 5 * dt;
+                p.mesh.material.opacity = Math.max(0, p.life);
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                    activeParticles.splice(i, 1);
+                }
+            }
+
+            // 4. Smooth Camera Orbit Interpolation
+            camState.theta += (camState.targetTheta - camState.theta) * 0.085;
+            camState.phi += (camState.targetPhi - camState.phi) * 0.085;
+            camState.radius += (camState.targetRadius - camState.radius) * 0.085;
+
+            camera.position.x = camState.radius * Math.sin(camState.phi) * Math.sin(camState.theta);
+            camera.position.y = camState.radius * Math.cos(camState.phi);
+            camera.position.z = camState.radius * Math.sin(camState.phi) * Math.cos(camState.theta);
+            camera.lookAt(camState.lookAt);
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            initScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
